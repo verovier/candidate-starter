@@ -163,8 +163,6 @@
 				prompt={editingPrompt}
 				on:save={handleSave}
 				on:close={handleClose}
-				aria-labelledby="modal-title"
-				aria-modal="true"
 		/>
 	{/if}
 
@@ -184,14 +182,12 @@
 		{/if}
 
 		<div class="starter-list">
-			<h3>Current prompts from API:</h3>
 			<ul>
 				{#each prompts as prompt}
 					<PromptCard
 							{prompt}
 							onEdit={handleEdit}
 							onDelete={handleDelete}
-							aria-label={`Prompt: ${prompt.name}`}
 					/>
 				{/each}
 			</ul>
