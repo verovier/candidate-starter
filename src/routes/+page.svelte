@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { userStore } from '$lib/stores/user';
 	import Modal from '$lib/components/Modal.svelte';
+	import PromptCard from '$lib/components/PromptCard.svelte'
 	import { listPrompts } from '$lib/api/prompts';
 	import type { Prompt } from '$lib/types';
 
@@ -10,7 +11,18 @@
 
 	onMount(async () => {
 		prompts = await listPrompts();
+		console.log(prompts);
 	});
+
+	function handleEdit(id: string) {
+		console.log('Edit', id);
+	}
+
+	function handleDelete(id: string) {
+		prompts = prompts.filter(p => p.id !== id);
+
+		console.log('Delete', id);
+	}
 </script>
 
 <div class="container">
@@ -40,10 +52,8 @@
 		<div class="starter-list">
 			<h3>Current prompts from API:</h3>
 			<ul>
-				{#each prompts as p}
-					<li>
-						<strong>{p.name}</strong> - {p.text}
-					</li>
+				{#each prompts as prompt}
+					<PromptCard {prompt} onEdit={handleEdit} onDelete={handleDelete} />
 				{/each}
 			</ul>
 		</div>
