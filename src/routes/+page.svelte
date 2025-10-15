@@ -82,7 +82,6 @@
 
 	async function handleSave(event: CustomEvent<Prompt>) {
 		const updated = event.detail;
-		console.log(updated);
 		const index = prompts.findIndex(p => p.id === updated.id);
 
 		try {
