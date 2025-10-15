@@ -14,3 +14,7 @@ Keep this under 300 words.
 - One improvement if you had more time:
 
 > I would enhance accessibility with full screen-reader announcements and better focus management, and add per-operation loading indicators for more precise user feedback.
+
+
+> **Note:**  
+> I've also added a [Notion document](https://irradiated-sovereign-090.notion.site/Veronika-Vierna-Front-End-Developer-28ca8e7360d680f2b612ce367ed177eb) with a detailed description of the test assessment for your convenience.
