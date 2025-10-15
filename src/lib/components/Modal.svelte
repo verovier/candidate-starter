@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
-	import type { Prompt } from '$lib/types.js';
+	import type { Prompt, SavePromptData } from "$lib/types.js";
 
 	export let prompt: Prompt | null = null;
 	export let closeOnEsc: boolean = true;
@@ -15,26 +15,30 @@
 	let modalEl: HTMLDivElement;
 
 	function close() {
-		console.log("close");
 		dispatch('close');
 	}
 
 	function save() {
-		const data: Prompt = {
-			id: prompt?.id ?? crypto.randomUUID(), // новий id для нового промпта
+		const data: SavePromptData = {
+			id: prompt?.id,
 			name,
 			text,
-			updatedAt: Date.now()
 		};
 		dispatch('save', data);
 		close();
 	}
 
-	function trapFocus(e: KeyboardEvent) {
-		const container = modalEl;
-		if (!container) return;
+	function handleBackdropKeyDown(e: KeyboardEvent) {
+		if (e.target === e.currentTarget && e.key === 'Enter') {
+			e.preventDefault();
+			close();
+		}
+	}
 
-		const tabbables = container.querySelectorAll<HTMLElement>(
+	function trapFocus(e: KeyboardEvent) {
+		if (!modalEl) return;
+
+		const tabbables = modalEl.querySelectorAll<HTMLElement>(
 				'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])'
 		);
 		const first = tabbables[0];
@@ -50,50 +54,47 @@
 			}
 		}
 
-		if (e.key === 'Escape' && closeOnEsc) {
-			close();
-		}
+		if (e.key === 'Escape' && closeOnEsc) close();
 	}
 
 	onMount(() => {
-		document.body.style.overflow = 'hidden';
+		document.body.style.overflow = 'hidden'; // Prevent body scroll
 		window.addEventListener('keydown', trapFocus, true);
 	});
 
 	onDestroy(() => {
-		document.body.style.overflow = '';
+		document.body.style.overflow = ''; // Restore body scroll
 		window.removeEventListener('keydown', trapFocus, true);
 	});
 </script>
 
 <div
-	class="backdrop"
-	role="button"
-	tabindex="0"
-	aria-label="Close modal"
-	on:click|self={close}
-	on:keydown={(e) => {
-    if (e.target === e.currentTarget && e.key === 'Enter') {
-      e.preventDefault();
-      close();
-    }
-  }}>
-	<div class="modal" tabindex="-1" bind:this={modalEl}>
+		class="backdrop"
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+		on:click|self={close}
+		on:keydown={handleBackdropKeyDown}
+>
+	<div
+			class="modal"
+			bind:this={modalEl}
+			tabindex="-1"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="modal-title"
+	>
 		<header>
-			<h2>{prompt ? 'Edit Prompt' : 'New Prompt'}</h2>
-			<button aria-label="Close" on:click={close}>×</button>
+			<h2 id="modal-title">{prompt ? 'Edit Prompt' : 'New Prompt'}</h2>
+			<button aria-label="Close modal" on:click={close}>×</button>
 		</header>
 
 		<main>
-			<label>
-				Name:
-				<input type="text" bind:value={name} />
-			</label>
+			<label for="prompt-name">Name:</label>
+			<input id="prompt-name" type="text" bind:value={name} />
 
-			<label>
-				Text:
-				<textarea rows="4" bind:value={text}></textarea>
-			</label>
+			<label for="prompt-text">Text:</label>
+			<textarea id="prompt-text" rows="4" bind:value={text}></textarea>
 		</main>
 
 		<footer>

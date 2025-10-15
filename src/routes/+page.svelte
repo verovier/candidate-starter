@@ -1,102 +1,200 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { userStore } from '$lib/stores/user';
+	import { onMount, onDestroy } from 'svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import PromptCard from '$lib/components/PromptCard.svelte'
-	import { listPrompts } from '$lib/api/prompts';
+	import PromptCard from '$lib/components/PromptCard.svelte';
 	import type { Prompt } from '$lib/types';
+	import { listPrompts, createPrompt, updatePrompt, deletePrompt } from '$lib/api/prompts';
+	import Toast from '$lib/components/Toast.svelte';
+	import { addToast } from '$lib/stores/toast';
 
 	let prompts: Prompt[] = [];
-	let showModal = false;
 	let editingPrompt: Prompt | null = null;
+	let loading = false;
 
-	onMount(async () => {
-		prompts = await listPrompts();
-		console.log(prompts);
-	});
+	// Track latest fetch to avoid race conditions
+	let latestFetchKey = 0;
 
-	function handleEdit(id: string) {
-		console.log('Edit', id);
-		const promptToEdit = prompts.find(prompt => prompt.id === id);
+	let showModal = false;
 
-		if (promptToEdit) openEditPromptModal(promptToEdit);
-	}
+	function updateFromURL() {
+		if (typeof window === 'undefined') return;
 
-	function handleDelete(id: string) {
-		prompts = prompts.filter(p => p.id !== id);
+		const params = new URLSearchParams(window.location.search);
+		const promptId = params.get('prompt');
 
-		console.log('Delete', id);
-	}
-
-	function openNewPromptModal() {
-		editingPrompt = null;
-		showModal = true;
+		if (promptId === 'new') {
+			editingPrompt = null;
+			showModal = true;
+		} else if (promptId) {
+			const promptToEdit = prompts.find(p => p.id === promptId);
+			if (promptToEdit) {
+				editingPrompt = promptToEdit;
+				showModal = true;
+			}
+		} else {
+			editingPrompt = null;
+			showModal = false;
+		}
 	}
 
 	function openEditPromptModal(prompt: Prompt) {
-		editingPrompt = prompt;
-		showModal = true;
+		if (typeof window === 'undefined') return;
+
+		const url = new URL(window.location.href);
+		url.searchParams.set('prompt', prompt.id);
+		history.pushState({}, '', url);
+		updateFromURL();
 	}
 
-	function handleSave(event: CustomEvent<Prompt>) {
-		const updated = event.detail;
-		const index = prompts.findIndex(p => p.id === updated.id);
-		if (index >= 0) {
-			prompts[index] = updated; // редагування
-		} else {
-			prompts.push(updated); // створення нового
-		}
-		showModal = false;
+	function openNewPromptModal() {
+		if (typeof window === 'undefined') return;
+
+		const url = new URL(window.location.href);
+		url.searchParams.set('prompt', 'new');
+		history.pushState({}, '', url);
+		updateFromURL();
 	}
 
 	function handleClose() {
-		showModal = false;
+		if (typeof window === 'undefined') return;
+
+		const url = new URL(window.location.href);
+		url.searchParams.delete('prompt');
+		history.pushState({}, '', url);
+		updateFromURL();
 	}
+
+	async function fetchPrompts() {
+		const fetchKey = ++latestFetchKey;
+		loading = true;
+		try {
+			const data = await listPrompts();
+			if (fetchKey === latestFetchKey) {
+				prompts = data;
+				updateFromURL();
+			}
+		} catch (err: any) {
+			addToast(err.message || 'Failed to load prompts', 'error');
+		} finally {
+			if (fetchKey === latestFetchKey) loading = false;
+		}
+	}
+
+	async function handleSave(event: CustomEvent<Prompt>) {
+		const updated = event.detail;
+		console.log(updated);
+		const index = prompts.findIndex(p => p.id === updated.id);
+
+		try {
+			if (index >= 0) {
+				const old = prompts[index];
+				prompts[index] = updated;
+				await updatePrompt(updated.id, { name: updated.name, text: updated.text });
+			} else {
+				prompts = [updated, ...prompts];
+				const created = await createPrompt(updated.name, updated.text);
+				const tempIndex = prompts.findIndex(p => p.id === updated.id);
+				prompts[tempIndex] = created;
+
+				if (typeof window !== 'undefined') {
+					const url = new URL(window.location.href);
+					url.searchParams.set('prompt', created.id);
+					history.replaceState({}, '', url);
+				}
+			}
+		} catch (err: any) {
+			addToast(err.message || 'Failed to save prompt', 'error');
+			if (index >= 0) {
+				await fetchPrompts();
+			} else {
+				prompts = prompts.filter(p => p.id !== updated.id);
+			}
+		}
+	}
+
+	async function handleDelete(id: string) {
+		const old = [...prompts];
+		prompts = prompts.filter(p => p.id !== id);
+
+		if (typeof window !== 'undefined') {
+			const url = new URL(window.location.href);
+			if (url.searchParams.get('prompt') === id) {
+				url.searchParams.delete('prompt');
+				history.replaceState({}, '', url);
+			}
+		}
+
+		try {
+			await deletePrompt(id);
+		} catch (err: any) {
+			addToast(err.message || 'Failed to delete prompt', 'error');
+			prompts = old;
+		}
+	}
+
+	function handleEdit(id: string) {
+		const promptToEdit = prompts.find(p => p.id === id);
+		if (promptToEdit) openEditPromptModal(promptToEdit);
+	}
+
+	/** Update modal state on browser back/forward */
+	function handlePopState() {
+		updateFromURL();
+	}
+
+	onMount(async () => {
+		await fetchPrompts();
+		if (typeof window !== 'undefined') {
+			window.addEventListener('popstate', handlePopState);
+		}
+	});
+
+	onDestroy(() => {
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('popstate', handlePopState);
+		}
+	});
 </script>
 
 <div class="container">
-	<h1>Generation Page</h1>
-	<p class="instructions">
-		<strong>Task:</strong> Implement a "Saved Prompts" panel below with CRUD operations,
-		optimistic updates, URL state sync, and basic accessibility.
-	</p>
-
-	<div class="demo-section">
-		<h2>Modal Demo</h2>
-		<p>Use this modal component for add/edit prompt operations.</p>
-		<button on:click={() => (showModal = true)}>Open Modal Demo</button>
-	</div>
+	<Toast />
 
 	{#if showModal}
 		<Modal
-			prompt={editingPrompt}
-			on:save={handleSave}
-			on:close={handleClose} />
+				prompt={editingPrompt}
+				on:save={handleSave}
+				on:close={handleClose}
+				aria-labelledby="modal-title"
+				aria-modal="true"
+		/>
 	{/if}
 
+	<h1 id="page-title">Generation Page</h1>
+
 	<section class="prompts-section" aria-label="Saved Prompts">
-		<h2>Saved Prompts</h2>
-		<button on:click={openNewPromptModal}>Add prompt</button>
-		<p class="hint">Candidates implement the full panel here ↓</p>
+		<div class="prompts-section-header">
+			<h2>Saved Prompts</h2>
+			<button on:click={openNewPromptModal} aria-label="Add new prompt">Add prompt</button>
+		</div>
+
+		{#if loading}
+			<div class="loader" role="status" aria-label="Loading prompts">
+				<div class="spinner"></div>
+				<span>Loading prompts...</span>
+			</div>
+		{/if}
 
 		<div class="starter-list">
 			<h3>Current prompts from API:</h3>
 			<ul>
 				{#each prompts as prompt}
-					<PromptCard {prompt} onEdit={handleEdit} onDelete={handleDelete} />
+					<PromptCard
+							{prompt}
+							onEdit={handleEdit}
+							onDelete={handleDelete}
+							aria-label={`Prompt: ${prompt.name}`}
+					/>
 				{/each}
-			</ul>
-		</div>
-
-		<div class="requirements">
-			<h3>Requirements to implement:</h3>
-			<ul>
-				<li>✓ Add, rename, delete prompts</li>
-				<li>✓ Optimistic updates with rollback on failure</li>
-				<li>✓ Selected prompt ID in URL (?prompt=...)</li>
-				<li>✓ URL + store sync (back/forward works)</li>
-				<li>✓ Handle out-of-order API responses</li>
-				<li>✓ Basic keyboard navigation & ARIA labels</li>
 			</ul>
 		</div>
 	</section>
@@ -110,42 +208,8 @@
 		font-family: system-ui, -apple-system, sans-serif;
 	}
 
-	h1 {
+	h1, h2, h3 {
 		color: #333;
-		margin-bottom: 8px;
-	}
-
-	h2 {
-		color: #555;
-		font-size: 1.25rem;
-		margin-top: 32px;
-		margin-bottom: 12px;
-	}
-
-	h3 {
-		color: #666;
-		font-size: 1rem;
-		margin-top: 16px;
-		margin-bottom: 8px;
-	}
-
-	.instructions {
-		background: #f0f9ff;
-		border-left: 4px solid #0ea5e9;
-		padding: 12px 16px;
-		margin: 16px 0;
-		border-radius: 4px;
-	}
-
-	.demo-section {
-		background: #fef3c7;
-		border: 1px solid #fbbf24;
-		padding: 16px;
-		border-radius: 6px;
-		margin: 24px 0;
-	}
-
-	.demo-section p {
 		margin: 8px 0;
 	}
 
@@ -167,15 +231,14 @@
 	.prompts-section {
 		margin-top: 32px;
 		padding: 24px;
-		border: 2px dashed #d1d5db;
 		border-radius: 8px;
 		background: #fafafa;
 	}
 
-	.hint {
-		color: #6b7280;
-		font-style: italic;
-		margin-bottom: 16px;
+	.prompts-section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 	}
 
 	.starter-list {
@@ -189,33 +252,26 @@
 	.starter-list ul {
 		list-style: none;
 		padding: 0;
-		margin: 8px 0 0 0;
+		margin: 0;
 	}
 
-	.starter-list li {
-		padding: 8px;
-		border-bottom: 1px solid #f3f4f6;
+	.loader {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 1rem 0;
 	}
 
-	.starter-list li:last-child {
-		border-bottom: none;
+	.spinner {
+		width: 20px;
+		height: 20px;
+		border: 3px solid #ccc;
+		border-top-color: #3b82f6;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
 	}
 
-	.requirements {
-		background: #f0fdf4;
-		padding: 16px;
-		border-radius: 6px;
-		margin-top: 16px;
-		border: 1px solid #86efac;
-	}
-
-	.requirements ul {
-		margin: 8px 0 0 0;
-		padding-left: 24px;
-	}
-
-	.requirements li {
-		margin: 6px 0;
-		color: #166534;
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 </style>
