@@ -1,0 +1,45 @@
+# IDE / Editor
+.idea/
+.vscode/
+
+# Node / PNPM
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build outputs
+.svelte-kit/
+build/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Static / cache artifacts
+*.cache
+*.temp
+
+# TypeScript
+*.tsbuildinfo
+
+# Generated files
+coverage/
+.sourcemaps/
+
+# Temporary or generated scripts
+scripts/tmp/
+tmp/
