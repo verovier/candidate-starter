@@ -8,6 +8,7 @@
 
 	let prompts: Prompt[] = [];
 	let showModal = false;
+	let editingPrompt: Prompt | null = null;
 
 	onMount(async () => {
 		prompts = await listPrompts();
@@ -16,12 +17,40 @@
 
 	function handleEdit(id: string) {
 		console.log('Edit', id);
+		const promptToEdit = prompts.find(prompt => prompt.id === id);
+
+		if (promptToEdit) openEditPromptModal(promptToEdit);
 	}
 
 	function handleDelete(id: string) {
 		prompts = prompts.filter(p => p.id !== id);
 
 		console.log('Delete', id);
+	}
+
+	function openNewPromptModal() {
+		editingPrompt = null;
+		showModal = true;
+	}
+
+	function openEditPromptModal(prompt: Prompt) {
+		editingPrompt = prompt;
+		showModal = true;
+	}
+
+	function handleSave(event: CustomEvent<Prompt>) {
+		const updated = event.detail;
+		const index = prompts.findIndex(p => p.id === updated.id);
+		if (index >= 0) {
+			prompts[index] = updated; // редагування
+		} else {
+			prompts.push(updated); // створення нового
+		}
+		showModal = false;
+	}
+
+	function handleClose() {
+		showModal = false;
 	}
 </script>
 
@@ -39,16 +68,17 @@
 	</div>
 
 	{#if showModal}
-		<Modal title="Example Modal" on:close={() => (showModal = false)}>
-			<p>Use this modal for your add and edit operations.</p>
-			<p>Make sure keyboard navigation works (Tab, Enter, Esc).</p>
-		</Modal>
+		<Modal
+			prompt={editingPrompt}
+			on:save={handleSave}
+			on:close={handleClose} />
 	{/if}
 
 	<section class="prompts-section" aria-label="Saved Prompts">
 		<h2>Saved Prompts</h2>
+		<button on:click={openNewPromptModal}>Add prompt</button>
 		<p class="hint">Candidates implement the full panel here ↓</p>
-		
+
 		<div class="starter-list">
 			<h3>Current prompts from API:</h3>
 			<ul>
